@@ -1,3 +1,28 @@
+CREATE DATABASE IF NOT EXISTS catalogo_animales;
+USE catalogo_animales;
+
+CREATE TABLE IF NOT EXISTS animales (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    nombre VARCHAR(100) NOT NULL,
+    especie VARCHAR(100) NOT NULL,
+    raza VARCHAR(100),
+    edad INT,
+    peso DECIMAL(5,2),
+    genero VARCHAR(10),
+    color VARCHAR(50),
+    fecha_ingreso DATE,
+    estado_salud VARCHAR(100)
+);
+
+
+
+
+
+
+
+
+
+
 ¡Claro, Juan! Aquí tienes una guía paso a paso, bien explicada y directa al grano, para que tu primo pueda instalar y usar XAMPP desde cero. Como él va a usar Linux, te dejo las instrucciones adaptadas para ese sistema (que es un poquito diferente a Windows pero súper seguro).
 
 ---
