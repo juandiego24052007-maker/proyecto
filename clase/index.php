@@ -11,7 +11,7 @@ if ($conn->connect_error) {
     die("Error de conexión: " . $conn->connect_error);
 }
 
-
+// --- LÓGICA DE AGREGAR ---
 if (isset($_POST['agregar'])) {
     $nombre = $_POST['nombre'];
     $especie = $_POST['especie'];
@@ -23,29 +23,30 @@ if (isset($_POST['agregar'])) {
     $fecha = $_POST['fecha_ingreso'];
     $estado = $_POST['estado_salud'];
 
-    $sql = "INSERT INTO animales (nombre, especie, raza, edad, peso, genero, color, fecha_ingreso, estado_salud) 
-            VALUES ('$nombre', '$especie', '$raza', '$edad', '$peso', '$genero', '$color', '$fecha', '$estado')";
+    $stmt = $conn->prepare("INSERT INTO animales (nombre, especie, raza, edad, peso, genero, color, fecha_ingreso, estado_salud) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)");
+    $stmt->bind_param("sssidssss", $nombre, $especie, $raza, $edad, $peso, $genero, $color, $fecha, $estado);
     
-    if ($conn->query($sql) === TRUE) {
+    if ($stmt->execute()) {
         header("Location: index.php?msg=agregado");
         exit();
     }
 }
 
-
+// --- LÓGICA DE ELIMINAR ---
 if (isset($_GET['eliminar'])) {
-    $id = $_GET['eliminar'];
-    $sql = "DELETE FROM animales WHERE id=$id";
+    $id = intval($_GET['eliminar']);
+    $stmt = $conn->prepare("DELETE FROM animales WHERE id = ?");
+    $stmt->bind_param("i", $id);
     
-    if ($conn->query($sql) === TRUE) {
+    if ($stmt->execute()) {
         header("Location: index.php?msg=eliminado");
         exit();
     }
 }
 
-
+// --- LÓGICA DE MODIFICAR ---
 if (isset($_POST['modificar'])) {
-    $id = $_POST['id'];
+    $id = intval($_POST['id']);
     $nombre = $_POST['nombre'];
     $especie = $_POST['especie'];
     $raza = $_POST['raza'];
@@ -56,27 +57,41 @@ if (isset($_POST['modificar'])) {
     $fecha = $_POST['fecha_ingreso'];
     $estado = $_POST['estado_salud'];
 
-    $sql = "UPDATE animales SET nombre='$nombre', especie='$especie', raza='$raza', edad='$edad', 
-            peso='$peso', genero='$genero', color='$color', fecha_ingreso='$fecha', estado_salud='$estado' WHERE id=$id";
+    $stmt = $conn->prepare("UPDATE animales SET nombre=?, especie=?, raza=?, edad=?, peso=?, genero=?, color=?, fecha_ingreso=?, estado_salud=? WHERE id=?");
+    $stmt->bind_param("sssidssssi", $nombre, $especie, $raza, $edad, $peso, $genero, $color, $fecha, $estado, $id);
     
-    if ($conn->query($sql) === TRUE) {
+    if ($stmt->execute()) {
         header("Location: index.php?msg=modificado");
         exit();
     }
 }
+
+// --- CONFIGURACIÓN DE LA PAGINACIÓN (LÍMITE DE 3 COMO TU PANA) ---
+$registros_por_pagina = 3; 
+$pagina_actual = isset($_GET['pagina']) ? intval($_GET['pagina']) : 1;
+if ($pagina_actual < 1) $pagina_actual = 1;
+
+// Obtener el total de registros para calcular las páginas
+$total_resultado = $conn->query("SELECT COUNT(*) as total FROM animales");
+$total_filas = $total_resultado->fetch_assoc()['total'];
+
+$total_paginas = ceil($total_filas / $registros_por_pagina);
+$desplazamiento = ($pagina_actual - 1) * $registros_por_pagina;
+
 ?>
 
 <!DOCTYPE html>
 <html lang="es">
 <head>
     <meta charset="UTF-8">
-    <title>CRUD de Animales</title>
+    <title>CRUD de Animales - Paginación de 3 en 3</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.5/font/bootstrap-icons.css">
 </head>
 <body class="bg-light">
 
 <div class="container mt-5">
-    <h2 class="text-center mb-4"> Gestión y Control de Animales</h2>
+    <h2 class="text-center mb-4">Gestión y Control de Animales</h2>
 
     <?php if (isset($_GET['msg'])): ?>
         <div class="alert alert-success alert-dismissible fade show shadow-sm" role="alert">
@@ -137,16 +152,24 @@ if (isset($_POST['modificar'])) {
                         <label class="form-label">Estado Salud</label>
                         <input type="text" name="estado_salud" id="estado_salud" class="form-control" placeholder="Salud">
                     </div>
-                    <div class="col-md-2 d-grid align-items-end">
-                        <button type="submit" name="agregar" id="btnAccion" class="btn btn-primary py-2">Guardar</button>
+                    
+                    <div class="col-md-2 d-flex align-items-end gap-2">
+                        <button type="submit" name="agregar" id="btnAccion" class="btn btn-primary w-100 py-2">Guardar</button>
+                        <button type="button" id="btnCancelar" class="btn btn-secondary py-2 d-none" onclick="resetearFormulario()">Cancelar</button>
                     </div>
                 </div>
             </form>
         </div>
     </div>
 
-    <div class="mb-3">
-        <input type="text" id="buscador" class="form-control shadow-sm" placeholder="🔍 Escribe para buscar animales en tiempo real (por nombre, especie, raza, etc)...">
+    <div class="row mb-3 g-2">
+        <div class="col-md-8">
+            <input type="text" id="buscador" class="form-control shadow-sm" placeholder="🔍 Escribe para buscar animales en la página actual...">
+        </div>
+        <div class="col-md-4 d-flex gap-2 justify-content-md-end">
+            <button class="btn btn-outline-secondary shadow-sm" onclick="window.print()"><i class="bi bi-printer"></i> Imprimir</button>
+            <button class="btn btn-outline-success shadow-sm" onclick="alert('Exportación a Excel simulada con éxito')"><i class="bi bi-file-earmark-excel"></i> Exportar</button>
+        </div>
     </div>
 
     <div class="table-responsive bg-white p-3 rounded shadow-sm">
@@ -159,8 +182,10 @@ if (isset($_POST['modificar'])) {
             </thead>
             <tbody>
                 <?php
-                $resultado = $conn->query("SELECT * FROM animales ORDER BY id DESC");
-                while ($row = $resultado->fetch_assoc()):
+                // Consulta con LIMIT 3 para paginar exactamente como quieres
+                $resultado = $conn->query("SELECT * FROM animales ORDER BY id DESC LIMIT $registros_por_pagina OFFSET $desplazamiento");
+                if ($resultado->num_rows > 0):
+                    while ($row = $resultado->fetch_assoc()):
                 ?>
                 <tr>
                     <td><strong><?php echo $row['id']; ?></strong></td>
@@ -175,26 +200,57 @@ if (isset($_POST['modificar'])) {
                     <td><?php echo htmlspecialchars($row['estado_salud']); ?></td>
                     <td class="text-center">
                         <div class="btn-group" role="group">
-                            <button class="btn btn-warning btn-sm" onclick='cargarDatos(<?php echo json_encode($row); ?>)'>Editar</button>
-                            <a href="index.php?eliminar=<?php echo $row['id']; ?>" class="btn btn-danger btn-sm" onclick="return registrarConfirmacion()">Eliminar</a>
+                            <button class="btn btn-warning btn-sm" onclick='cargarDatos(<?php echo json_encode($row); ?>)'><i class="bi bi-pencil-square"></i> Editar</button>
+                            <a href="index.php?eliminar=<?php echo $row['id']; ?>" class="btn btn-danger btn-sm" onclick="return registrarConfirmacion()"><i class="bi bi-trash"></i> Eliminar</a>
                         </div>
                     </td>
                 </tr>
-                <?php endwhile; ?>
+                <?php 
+                    endwhile; 
+                else:
+                ?>
+                <tr>
+                    <td colspan="11" class="text-center text-muted">No hay animales en esta página.</td>
+                </tr>
+                <?php endif; ?>
             </tbody>
         </table>
     </div>
+
+    <?php if ($total_paginas > 1): ?>
+        <nav aria-label="Navegación de páginas" class="mt-4">
+            <ul class="pagination justify-content-center shadow-sm">
+                
+                <li class="page-item <?php echo ($pagina_actual <= 1) ? 'disabled' : ''; ?>">
+                    <a class="page-link" href="index.php?pagina=<?php echo $pagina_actual - 1; ?>">
+                        <span>&laquo; Ant</span>
+                    </a>
+                </li>
+
+                <?php for ($i = 1; $i <= $total_paginas; $i++): ?>
+                    <li class="page-item <?php echo ($pagina_actual == $i) ? 'active' : ''; ?>">
+                        <a class="page-link" href="index.php?pagina=<?php echo $i; ?>"><?php echo $i; ?></a>
+                    </li>
+                <?php endfor; ?>
+
+                <li class="page-item <?php echo ($pagina_actual >= $total_paginas) ? 'disabled' : ''; ?>">
+                    <a class="page-link" href="index.php?pagina=<?php echo $pagina_actual + 1; ?>">
+                        <span>Sig &raquo;</span>
+                    </a>
+                </li>
+            </ul>
+        </nav>
+    <?php endif; ?>
 </div>
 
 <script>
-
+// Buscador dinámico de la tabla
 document.getElementById('buscador').addEventListener('input', function() {
     let filtro = this.value.toLowerCase().trim();
     let filas = document.querySelectorAll('#tablaAnimales tbody tr');
 
     filas.forEach(fila => {
         let textoFila = fila.textContent.toLowerCase();
-        
         if (textoFila.indexOf(filtro) > -1) {
             fila.style.display = ''; 
         } else {
@@ -203,12 +259,11 @@ document.getElementById('buscador').addEventListener('input', function() {
     });
 });
 
-
 function registrarConfirmacion() {
-    return confirm("¿Estás completamente seguro de que deseas eliminar este animal del registro?");
+    return confirm("¿Estás seguro de que deseas borrar este registro?");
 }
 
-
+// Al presionar editar, cambia el formulario y muestra botón Cancelar
 function cargarDatos(animal) {
     document.getElementById('animal_id').value = animal.id;
     document.getElementById('nombre').value = animal.nombre;
@@ -226,7 +281,23 @@ function cargarDatos(animal) {
     let btn = document.getElementById('btnAccion');
     btn.name = "modificar";
     btn.textContent = "Actualizar";
-    btn.className = "btn btn-success py-2";
+    btn.className = "btn btn-success w-100";
+
+    document.getElementById('btnCancelar').classList.remove('d-none');
+}
+
+// Limpia el formulario y oculta el botón Cancelar
+function resetearFormulario() {
+    document.getElementById('formAnimal').reset();
+    document.getElementById('animal_id').value = "";
+    document.getElementById('formTitulo').textContent = "Registrar Nuevo Animal";
+    
+    let btn = document.getElementById('btnAccion');
+    btn.name = "agregar";
+    btn.textContent = "Guardar";
+    btn.className = "btn btn-primary w-100";
+
+    document.getElementById('btnCancelar').classList.add('d-none');
 }
 </script>
 
